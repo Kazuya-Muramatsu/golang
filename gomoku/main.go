@@ -58,8 +58,10 @@ var (
 	scene     *sprite.Node
 	fps       *debug.FPS
 
-	touchX float32
-	touchY float32
+	touchX     float32
+	touchY     float32
+	touchCount int
+	goisiTexs  []sprite.SubTex
 )
 
 func main() {
@@ -91,8 +93,7 @@ func main() {
 				if e.Type.String() == "end" {
 					touchX = e.X
 					touchY = e.Y
-					log.Printf("x", touchX, e.Type)
-					log.Printf("y", touchY, e.Type)
+					onTouchEnd()
 				}
 			}
 		}
@@ -120,6 +121,21 @@ func onPaint(glctx gl.Context, sz size.Event) {
 	fps.Draw(sz)
 }
 
+func onTouchEnd() {
+	touchCount++
+	var n *sprite.Node
+	n = newNode()
+	if touchCount%2 == 0 {
+		eng.SetSubTex(n, goisiTexs[texBlack])
+	} else {
+		eng.SetSubTex(n, goisiTexs[texWhite])
+	}
+	eng.SetTransform(n, f32.Affine{
+		{15, 0, touchX},
+		{0, 15, touchY},
+	})
+}
+
 func newNode() *sprite.Node {
 	n := &sprite.Node{}
 	eng.Register(n)
@@ -129,6 +145,7 @@ func newNode() *sprite.Node {
 
 func loadScene() {
 	texs := loadTextures()
+	goisiTexs = loadGoisiTextures()
 	scene = &sprite.Node{}
 	eng.Register(scene)
 	eng.SetTransform(scene, f32.Affine{
@@ -180,6 +197,8 @@ func loadScene() {
 
 const (
 	texGoban = iota
+	texWhite
+	texBlack
 )
 
 func loadTextures() []sprite.SubTex {
@@ -200,6 +219,28 @@ func loadTextures() []sprite.SubTex {
 
 	return []sprite.SubTex{
 		texGoban: sprite.SubTex{t, image.Rect(0, 0, 703, 703)},
+	}
+}
+
+func loadGoisiTextures() []sprite.SubTex {
+	a, err := asset.Open("goisi13.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer a.Close()
+
+	img, _, err := image.Decode(a)
+	if err != nil {
+		log.Fatal(err)
+	}
+	t, err := eng.LoadTexture(img)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return []sprite.SubTex{
+		texWhite: sprite.SubTex{t, image.Rect(0, 0, 49, 49)},
+		texBlack: sprite.SubTex{t, image.Rect(50, 0, 99, 49)},
 	}
 }
 
