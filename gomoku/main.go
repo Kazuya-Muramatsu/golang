@@ -62,6 +62,7 @@ var (
 	touchY     float32
 	touchCount int
 	goisiTexs  []sprite.SubTex
+	loadscene  bool
 )
 
 func main() {
@@ -75,17 +76,18 @@ func main() {
 				case lifecycle.CrossOn:
 					visible = true
 					glctx, _ = e.DrawContext.(gl.Context)
-					onStart(glctx)
+					onStart(glctx, sz)
 				case lifecycle.CrossOff:
 					visible = false
+					loadscene = false
 					onStop()
 				}
 			case size.Event:
 				sz = e
 			case paint.Event:
+				onPaint(glctx, sz)
+				a.Publish()
 				if visible {
-					onPaint(glctx, sz)
-					a.Publish()
 					// Keep animating.
 					a.Send(paint.Event{})
 				}
@@ -93,18 +95,18 @@ func main() {
 				if e.Type.String() == "end" {
 					touchX = e.X
 					touchY = e.Y
-					onTouchEnd()
+					onTouchEnd(sz)
 				}
 			}
 		}
 	})
 }
 
-func onStart(glctx gl.Context) {
+func onStart(glctx gl.Context, sz size.Event) {
 	images = glutil.NewImages(glctx)
 	fps = debug.NewFPS(images)
 	eng = glsprite.Engine(images)
-	loadScene()
+	loadScene(sz)
 }
 
 func onStop() {
@@ -119,9 +121,15 @@ func onPaint(glctx gl.Context, sz size.Event) {
 	now := clock.Time(time.Since(startTime) * 60 / time.Second)
 	eng.Render(scene, now, sz)
 	fps.Draw(sz)
+	// androidでonStart時に
+	// 画面サイズが取れなかったので
+	// onPaint内でもっかい呼ぶ
+	if !loadscene {
+		loadScene(sz)
+	}
 }
 
-func onTouchEnd() {
+func onTouchEnd(sz size.Event) {
 	touchCount++
 	var n *sprite.Node
 	n = newNode()
@@ -130,9 +138,12 @@ func onTouchEnd() {
 	} else {
 		eng.SetSubTex(n, goisiTexs[texWhite])
 	}
+	log.Printf("x", touchX)
+	log.Printf("y", touchY)
+
 	eng.SetTransform(n, f32.Affine{
-		{15, 0, touchX},
-		{0, 15, touchY},
+		{15, 0, touchX / sz.PixelsPerPt},
+		{0, 15, touchY / sz.PixelsPerPt},
 	})
 }
 
@@ -143,7 +154,10 @@ func newNode() *sprite.Node {
 	return n
 }
 
-func loadScene() {
+func loadScene(sz size.Event) {
+	if sz.WidthPt != 0 && sz.HeightPt != 0 {
+		loadscene = true
+	}
 	texs := loadTextures()
 	goisiTexs = loadGoisiTextures()
 	scene = &sprite.Node{}
@@ -155,11 +169,14 @@ func loadScene() {
 
 	var n *sprite.Node
 
+	log.Println(sz.WidthPt)
+	log.Println(sz.HeightPt)
+
 	n = newNode()
 	eng.SetSubTex(n, texs[texGoban])
 	eng.SetTransform(n, f32.Affine{
-		{300, 0, 0},
-		{0, 300, 0},
+		{float32(sz.WidthPt), 0, 0},
+		{0, float32(sz.WidthPt), float32((sz.HeightPt - sz.WidthPt) / 2)},
 	})
 
 	/*
@@ -218,7 +235,7 @@ func loadTextures() []sprite.SubTex {
 	}
 
 	return []sprite.SubTex{
-		texGoban: sprite.SubTex{t, image.Rect(0, 0, 703, 703)},
+		texGoban: sprite.SubTex{t, image.Rect(0, 0, 637, 637)},
 	}
 }
 
