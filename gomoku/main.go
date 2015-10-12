@@ -36,6 +36,8 @@ import (
 
 	_ "image/png"
 
+	"./board"
+
 	"golang.org/x/mobile/app"
 	"golang.org/x/mobile/asset"
 	"golang.org/x/mobile/event/lifecycle"
@@ -51,6 +53,12 @@ import (
 	"golang.org/x/mobile/gl"
 )
 
+const (
+	SPACE = 0
+	BLACK = 1
+	WHITE = 2
+)
+
 var (
 	startTime = time.Now()
 	images    *glutil.Images
@@ -58,11 +66,15 @@ var (
 	scene     *sprite.Node
 	fps       *debug.FPS
 
-	touchX     float32
-	touchY     float32
-	touchCount int
-	goisiTexs  []sprite.SubTex
-	loadscene  bool
+	endFlag   bool
+	goisiTexs []sprite.SubTex
+	loadscene bool
+	whichTurn int
+	b         *board.Board
+
+	prevPosX int
+	prevPosY int
+	prevN    *sprite.Node
 )
 
 func main() {
@@ -92,17 +104,26 @@ func main() {
 					a.Send(paint.Event{})
 				}
 			case touch.Event:
-				if e.Type.String() == "end" {
-					touchX = e.X
-					touchY = e.Y
-					onTouchEnd(sz)
+				if endFlag {
+					onStart(glctx, sz)
 				}
+				/*
+					if e.Type.String() == "end" {
+						touchX = e.X
+						touchY = e.Y
+						onTouchEnd(sz)
+					}
+				*/
+				onTouchEnd(e, sz)
 			}
 		}
 	})
 }
 
 func onStart(glctx gl.Context, sz size.Event) {
+	endFlag = false
+	b = board.New13()
+	whichTurn = BLACK
 	images = glutil.NewImages(glctx)
 	fps = debug.NewFPS(images)
 	eng = glsprite.Engine(images)
@@ -129,22 +150,82 @@ func onPaint(glctx gl.Context, sz size.Event) {
 	}
 }
 
-func onTouchEnd(sz size.Event) {
-	touchCount++
-	var n *sprite.Node
-	n = newNode()
-	if touchCount%2 == 0 {
-		eng.SetSubTex(n, goisiTexs[texBlack])
-	} else {
-		eng.SetSubTex(n, goisiTexs[texWhite])
-	}
-	log.Printf("x", touchX)
-	log.Printf("y", touchY)
+func onTouchEnd(e touch.Event, sz size.Event) {
+	var (
+		posX int
+		posY int
+		n    *sprite.Node
+	)
 
-	eng.SetTransform(n, f32.Affine{
-		{15, 0, touchX / sz.PixelsPerPt},
-		{0, 15, touchY / sz.PixelsPerPt},
-	})
+	//log.Printf("x", touchX/sz.PixelsPerPt)
+	//log.Printf("y", touchY/sz.PixelsPerPt)
+
+	posX = int(e.X / sz.PixelsPerPt * 12 / float32(sz.WidthPt))
+	posY = int(e.Y / sz.PixelsPerPt * 12 / float32(sz.WidthPt))
+
+	if posX == prevPosX && posY == prevPosY {
+		return
+	}
+
+	if posX < 0 || posX > 12 || posY < 0 || posY > 12 {
+		return
+	}
+
+	switch e.Type.String() {
+	case "begin":
+		prevN = newNode()
+		if whichTurn == BLACK {
+			eng.SetSubTex(prevN, goisiTexs[texBlack])
+		} else {
+			eng.SetSubTex(prevN, goisiTexs[texWhite])
+		}
+		eng.SetTransform(prevN, f32.Affine{
+			{float32(sz.WidthPx/12) / sz.PixelsPerPt, 0, float32(float32(sz.WidthPx/12*posX)/sz.PixelsPerPt - float32(sz.WidthPx/12)/sz.PixelsPerPt/2)},
+			{0, float32(sz.WidthPx/12) / sz.PixelsPerPt, float32(float32(sz.WidthPx/12*posY)/sz.PixelsPerPt - float32(sz.WidthPx/12)/sz.PixelsPerPt/2)},
+		})
+	case "move":
+		eng.SetTransform(prevN, f32.Affine{
+			{float32(sz.WidthPx/12) / sz.PixelsPerPt, 0, float32(float32(sz.WidthPx/12*posX)/sz.PixelsPerPt - float32(sz.WidthPx/12)/sz.PixelsPerPt/2)},
+			{0, float32(sz.WidthPx/12) / sz.PixelsPerPt, float32(float32(sz.WidthPx/12*posY)/sz.PixelsPerPt - float32(sz.WidthPx/12)/sz.PixelsPerPt/2)},
+		})
+	case "end":
+		eng.SetSubTex(prevN, sprite.SubTex{})
+		n = newNode()
+		if whichTurn == BLACK {
+			eng.SetSubTex(n, goisiTexs[texBlack])
+		} else {
+			eng.SetSubTex(n, goisiTexs[texWhite])
+		}
+		//posX = int(touchX / sz.PixelsPerPt * 12 / float32(sz.WidthPt))
+		//posY = int(touchY / sz.PixelsPerPt * 12 / float32(sz.WidthPt))
+		log.Printf("posX", posX)
+		log.Printf("posY", posY)
+		canPut := board.PutPos(b, posX, posY, whichTurn)
+		if !canPut {
+			return
+		}
+
+		eng.SetTransform(n, f32.Affine{
+			{float32(sz.WidthPx/12) / sz.PixelsPerPt, 0, float32(float32(sz.WidthPx/12*posX)/sz.PixelsPerPt - float32(sz.WidthPx/12)/sz.PixelsPerPt/2)},
+			{0, float32(sz.WidthPx/12) / sz.PixelsPerPt, float32(float32(sz.WidthPx/12*posY)/sz.PixelsPerPt - float32(sz.WidthPx/12)/sz.PixelsPerPt/2)},
+		})
+
+		gameEnd := board.GameEnd(b)
+		if gameEnd {
+			endFlag = true
+			return
+		}
+
+		changeTurn()
+	}
+}
+
+func changeTurn() {
+	if whichTurn == BLACK {
+		whichTurn = WHITE
+	} else {
+		whichTurn = BLACK
+	}
 }
 
 func newNode() *sprite.Node {
@@ -176,7 +257,8 @@ func loadScene(sz size.Event) {
 	eng.SetSubTex(n, texs[texGoban])
 	eng.SetTransform(n, f32.Affine{
 		{float32(sz.WidthPt), 0, 0},
-		{0, float32(sz.WidthPt), float32((sz.HeightPt - sz.WidthPt) / 2)},
+		//{0, float32(sz.WidthPt), float32((sz.HeightPt - sz.WidthPt) / 2)},
+		{0, float32(sz.WidthPt), 0},
 	})
 
 	/*
@@ -219,7 +301,7 @@ const (
 )
 
 func loadTextures() []sprite.SubTex {
-	a, err := asset.Open("goban13.png")
+	a, err := asset.Open("goban13_x.png")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -235,7 +317,7 @@ func loadTextures() []sprite.SubTex {
 	}
 
 	return []sprite.SubTex{
-		texGoban: sprite.SubTex{t, image.Rect(0, 0, 637, 637)},
+		texGoban: sprite.SubTex{t, image.Rect(0, 0, 589, 589)},
 	}
 }
 
