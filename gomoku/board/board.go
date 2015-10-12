@@ -39,6 +39,7 @@ func PutPos(b *Board, posX int, posY int, which int) bool {
 	return true
 }
 
+// うまく判定されなかった
 func lenCheck(b *Board, x int, y int) bool {
 	dx := [3]int{0, 1, 1}
 	dy := [3]int{1, 0, 1}
@@ -58,6 +59,7 @@ func lenCheck(b *Board, x int, y int) bool {
 	return false
 }
 
+// 上のがうまく判定されなかったので、超自力
 func lenCheck2(b *Board, x int, y int) bool {
 	/*縦の検索*/
 	line := 1
@@ -89,7 +91,7 @@ func lenCheck2(b *Board, x int, y int) bool {
 			return true
 		}
 	}
-	/* 斜めの検索1 */
+	/* 斜めの検索(右下) */
 	line = 1
 	for i := 1; i <= 4; i++ {
 		if x+i > 12 || y+i > 12 {
@@ -104,7 +106,7 @@ func lenCheck2(b *Board, x int, y int) bool {
 			return true
 		}
 	}
-	/* 斜めの検索2 */
+	/* 斜めの検索(右上) */
 	line = 1
 	for i := 1; i <= 4; i++ {
 		if y-i < 0 || x-i < 0 {

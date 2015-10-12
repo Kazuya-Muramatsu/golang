@@ -31,7 +31,6 @@ package main
 import (
 	"image"
 	"log"
-	//	"math"
 	"time"
 
 	_ "image/png"
@@ -105,15 +104,9 @@ func main() {
 				}
 			case touch.Event:
 				if endFlag {
+					// 終了していたらタッチで再スタート
 					onStart(glctx, sz)
 				}
-				/*
-					if e.Type.String() == "end" {
-						touchX = e.X
-						touchY = e.Y
-						onTouchEnd(sz)
-					}
-				*/
 				onTouchEnd(e, sz)
 			}
 		}
@@ -127,7 +120,7 @@ func onStart(glctx gl.Context, sz size.Event) {
 	images = glutil.NewImages(glctx)
 	fps = debug.NewFPS(images)
 	eng = glsprite.Engine(images)
-	loadScene(sz)
+	loadScene(glctx, sz)
 }
 
 func onStop() {
@@ -146,33 +139,43 @@ func onPaint(glctx gl.Context, sz size.Event) {
 	// 画面サイズが取れなかったので
 	// onPaint内でもっかい呼ぶ
 	if !loadscene {
-		loadScene(sz)
+		loadScene(glctx, sz)
 	}
 }
 
 func onTouchEnd(e touch.Event, sz size.Event) {
 	var (
-		posX int
-		posY int
-		n    *sprite.Node
+		offset = 1
+		posX   int
+		posY   int
+		n      *sprite.Node
 	)
 
 	//log.Printf("x", touchX/sz.PixelsPerPt)
 	//log.Printf("y", touchY/sz.PixelsPerPt)
 
 	posX = int(e.X / sz.PixelsPerPt * 12 / float32(sz.WidthPt))
-	posY = int(e.Y / sz.PixelsPerPt * 12 / float32(sz.WidthPt))
+	posY = int((e.Y/sz.PixelsPerPt - float32((sz.HeightPt-sz.WidthPt)/2)) * 12 / float32(sz.WidthPt))
 
+	// 画面右端のために
+	// 画面半分過ぎたらポイントの右側に表示
+	if int(e.X) > sz.WidthPx/2+sz.WidthPx/12/2 {
+		posX += offset
+	}
+
+	// タッチ中に座標が移動しなければ何もしない
 	if posX == prevPosX && posY == prevPosY {
 		return
 	}
 
+	// 盤外
 	if posX < 0 || posX > 12 || posY < 0 || posY > 12 {
 		return
 	}
 
 	switch e.Type.String() {
 	case "begin":
+		// タッチ開始時に画像を作成して表示
 		prevN = newNode()
 		if whichTurn == BLACK {
 			eng.SetSubTex(prevN, goisiTexs[texBlack])
@@ -181,14 +184,16 @@ func onTouchEnd(e touch.Event, sz size.Event) {
 		}
 		eng.SetTransform(prevN, f32.Affine{
 			{float32(sz.WidthPx/12) / sz.PixelsPerPt, 0, float32(float32(sz.WidthPx/12*posX)/sz.PixelsPerPt - float32(sz.WidthPx/12)/sz.PixelsPerPt/2)},
-			{0, float32(sz.WidthPx/12) / sz.PixelsPerPt, float32(float32(sz.WidthPx/12*posY)/sz.PixelsPerPt - float32(sz.WidthPx/12)/sz.PixelsPerPt/2)},
+			{0, float32(sz.WidthPx/12) / sz.PixelsPerPt, float32(float32(sz.WidthPx/12*posY)/sz.PixelsPerPt-float32(sz.WidthPx/12)/sz.PixelsPerPt/2) + float32((sz.HeightPt-sz.WidthPt)/2)},
 		})
 	case "move":
+		// タッチ中は動かせる
 		eng.SetTransform(prevN, f32.Affine{
 			{float32(sz.WidthPx/12) / sz.PixelsPerPt, 0, float32(float32(sz.WidthPx/12*posX)/sz.PixelsPerPt - float32(sz.WidthPx/12)/sz.PixelsPerPt/2)},
-			{0, float32(sz.WidthPx/12) / sz.PixelsPerPt, float32(float32(sz.WidthPx/12*posY)/sz.PixelsPerPt - float32(sz.WidthPx/12)/sz.PixelsPerPt/2)},
+			{0, float32(sz.WidthPx/12) / sz.PixelsPerPt, float32(float32(sz.WidthPx/12*posY)/sz.PixelsPerPt-float32(sz.WidthPx/12)/sz.PixelsPerPt/2) + float32((sz.HeightPt-sz.WidthPt)/2)},
 		})
 	case "end":
+		// 話したら石を置く
 		eng.SetSubTex(prevN, sprite.SubTex{})
 		n = newNode()
 		if whichTurn == BLACK {
@@ -198,8 +203,10 @@ func onTouchEnd(e touch.Event, sz size.Event) {
 		}
 		//posX = int(touchX / sz.PixelsPerPt * 12 / float32(sz.WidthPt))
 		//posY = int(touchY / sz.PixelsPerPt * 12 / float32(sz.WidthPt))
-		log.Printf("posX", posX)
-		log.Printf("posY", posY)
+		//log.Printf("posX", posX)
+		//log.Printf("posY", posY)
+
+		// 置けるかどうか
 		canPut := board.PutPos(b, posX, posY, whichTurn)
 		if !canPut {
 			return
@@ -207,15 +214,17 @@ func onTouchEnd(e touch.Event, sz size.Event) {
 
 		eng.SetTransform(n, f32.Affine{
 			{float32(sz.WidthPx/12) / sz.PixelsPerPt, 0, float32(float32(sz.WidthPx/12*posX)/sz.PixelsPerPt - float32(sz.WidthPx/12)/sz.PixelsPerPt/2)},
-			{0, float32(sz.WidthPx/12) / sz.PixelsPerPt, float32(float32(sz.WidthPx/12*posY)/sz.PixelsPerPt - float32(sz.WidthPx/12)/sz.PixelsPerPt/2)},
+			{0, float32(sz.WidthPx/12) / sz.PixelsPerPt, float32(float32(sz.WidthPx/12*posY)/sz.PixelsPerPt-float32(sz.WidthPx/12)/sz.PixelsPerPt/2) + float32((sz.HeightPt-sz.WidthPt)/2)},
 		})
 
+		// 終了判定
 		gameEnd := board.GameEnd(b)
 		if gameEnd {
 			endFlag = true
 			return
 		}
 
+		// ターン交代
 		changeTurn()
 	}
 }
@@ -235,12 +244,12 @@ func newNode() *sprite.Node {
 	return n
 }
 
-func loadScene(sz size.Event) {
+func loadScene(glctx gl.Context, sz size.Event) {
 	if sz.WidthPt != 0 && sz.HeightPt != 0 {
 		loadscene = true
 	}
 	texs := loadTextures()
-	goisiTexs = loadGoisiTextures()
+	goisiTexs = loadGoisiTextures(glctx)
 	scene = &sprite.Node{}
 	eng.Register(scene)
 	eng.SetTransform(scene, f32.Affine{
@@ -257,41 +266,9 @@ func loadScene(sz size.Event) {
 	eng.SetSubTex(n, texs[texGoban])
 	eng.SetTransform(n, f32.Affine{
 		{float32(sz.WidthPt), 0, 0},
-		//{0, float32(sz.WidthPt), float32((sz.HeightPt - sz.WidthPt) / 2)},
-		{0, float32(sz.WidthPt), 0},
+		{0, float32(sz.WidthPt), float32((sz.HeightPt - sz.WidthPt) / 2)},
+		//	{0, float32(sz.WidthPt), 0},
 	})
-
-	/*
-		n = newNode()
-		eng.SetSubTex(n, texs[texFire])
-		eng.SetTransform(n, f32.Affine{
-			{72, 0, 144},
-			{0, 72, 144},
-		})
-
-		n = newNode()
-		n.Arranger = arrangerFunc(func(eng sprite.Engine, n *sprite.Node, t clock.Time) {
-			// TODO: use a tweening library instead of manually arranging.
-			t0 := uint32(t) % 120
-			if t0 < 60 {
-				eng.SetSubTex(n, texs[texGopherR])
-			} else {
-				eng.SetSubTex(n, texs[texGopherL])
-			}
-
-			u := float32(t0) / 120
-			u = (1 - f32.Cos(u*2*math.Pi)) / 2
-
-			tx := 18 + u*48
-			ty := 36 + u*108
-			sx := 36 + u*36
-			sy := 36 + u*36
-			eng.SetTransform(n, f32.Affine{
-				{sx, 0, tx},
-				{0, sy, ty},
-			})
-		})
-	*/
 }
 
 const (
@@ -321,7 +298,12 @@ func loadTextures() []sprite.SubTex {
 	}
 }
 
-func loadGoisiTextures() []sprite.SubTex {
+func loadGoisiTextures(glctx gl.Context) []sprite.SubTex {
+	// 透過画像読み込みにOpenGL関数を使う
+	glctx.Enable(gl.BLEND)
+	glctx.BlendEquation(gl.FUNC_ADD)
+	glctx.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+
 	a, err := asset.Open("goisi13.png")
 	if err != nil {
 		log.Fatal(err)
@@ -342,7 +324,3 @@ func loadGoisiTextures() []sprite.SubTex {
 		texBlack: sprite.SubTex{t, image.Rect(50, 0, 99, 49)},
 	}
 }
-
-type arrangerFunc func(e sprite.Engine, n *sprite.Node, t clock.Time)
-
-func (a arrangerFunc) Arrange(e sprite.Engine, n *sprite.Node, t clock.Time) { a(e, n, t) }
