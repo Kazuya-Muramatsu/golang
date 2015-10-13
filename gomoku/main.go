@@ -29,6 +29,7 @@
 package main
 
 import (
+	"bytes"
 	"image"
 	"log"
 	"time"
@@ -38,7 +39,6 @@ import (
 	"./board"
 
 	"golang.org/x/mobile/app"
-	"golang.org/x/mobile/asset"
 	"golang.org/x/mobile/event/lifecycle"
 	"golang.org/x/mobile/event/paint"
 	"golang.org/x/mobile/event/size"
@@ -203,8 +203,8 @@ func onTouchEnd(e touch.Event, sz size.Event) {
 		}
 		//posX = int(touchX / sz.PixelsPerPt * 12 / float32(sz.WidthPt))
 		//posY = int(touchY / sz.PixelsPerPt * 12 / float32(sz.WidthPt))
-		//log.Printf("posX", posX)
-		//log.Printf("posY", posY)
+		log.Printf("posX", posX)
+		log.Printf("posY", posY)
 
 		// 置けるかどうか
 		canPut := board.PutPos(b, posX, posY, whichTurn)
@@ -278,13 +278,14 @@ const (
 )
 
 func loadTextures() []sprite.SubTex {
-	a, err := asset.Open("goban13_x.png")
+	a, err := Asset("assets/goban13_x.png")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer a.Close()
+	//	defer a.Close()
 
-	img, _, err := image.Decode(a)
+	buf := bytes.NewBuffer(a)
+	img, _, err := image.Decode(buf)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -304,13 +305,14 @@ func loadGoisiTextures(glctx gl.Context) []sprite.SubTex {
 	glctx.BlendEquation(gl.FUNC_ADD)
 	glctx.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 
-	a, err := asset.Open("goisi13.png")
+	a, err := Asset("assets/goisi13.png")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer a.Close()
+	//	defer a.Close()
 
-	img, _, err := image.Decode(a)
+	buf := bytes.NewBuffer(a)
+	img, _, err := image.Decode(buf)
 	if err != nil {
 		log.Fatal(err)
 	}
