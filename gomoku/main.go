@@ -79,29 +79,29 @@ var (
 func main() {
 	app.Main(func(a app.App) {
 		var glctx gl.Context
-		visible, sz := false, size.Event{}
+		sz := size.Event{}
 		for e := range a.Events() {
 			switch e := a.Filter(e).(type) {
 			case lifecycle.Event:
 				switch e.Crosses(lifecycle.StageVisible) {
 				case lifecycle.CrossOn:
-					visible = true
 					glctx, _ = e.DrawContext.(gl.Context)
 					onStart(glctx, sz)
+					a.Send(paint.Event{})
 				case lifecycle.CrossOff:
-					visible = false
 					loadscene = false
+					glctx = nil
 					onStop()
 				}
 			case size.Event:
 				sz = e
 			case paint.Event:
+				if glctx == nil || e.External {
+					continue
+				}
 				onPaint(glctx, sz)
 				a.Publish()
-				if visible {
-					// Keep animating.
-					a.Send(paint.Event{})
-				}
+				repaint(a) // keep animating
 			case touch.Event:
 				if endFlag {
 					// 終了していたらタッチで再スタート
